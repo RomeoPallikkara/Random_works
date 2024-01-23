@@ -1,0 +1,102 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.io import fits
+
+my_file = '/home/romeo/Desktop/High_energy/pks1222/pks1222.fc.spec_090429.fits'
+hdul = fits.open(my_file)
+flux = hdul[0].data
+
+x_data = np.arange(len(flux))
+
+def calculate_mse(y_true, y_pred):
+    return np.mean((y_true - y_pred)**2)
+
+best_fit_degree = None
+best_fit_mse = float('inf')
+
+for degree in range(1, 8):
+    coefficients = np.polyfit(x_data, flux, degree)
+    fitted_curve = np.poly1d(coefficients)
+    y_fit = fitted_curve(x_data)
+    mse = calculate_mse(flux, y_fit)
+
+    if mse < best_fit_mse:
+        best_fit_mse = mse
+        best_fit_degree = degree
+
+best_fit_coefficients = np.polyfit(x_data, flux, best_fit_degree)
+best_fit_curve = np.poly1d(best_fit_coefficients)
+
+x_fit = np.linspace(min(x_data), max(x_data), 100)
+y_fit = best_fit_curve(x_fit)
+
+# Plot the original spectral data and the best-fit curve in log-log scale
+fig, axs = plt.subplots(2, 2, figsize=(20, 10))
+
+# Plot in log-log scale
+axs[0, 0].plot(x_data, flux, label='Original Spectral Data')
+axs[0, 0].plot(x_fit, y_fit, label=f'Best Fit (Degree {best_fit_degree})', color='red')
+axs[0, 0].axhline(y=0, color='black', linestyle='--', linewidth=1)
+axs[0, 0].legend()
+axs[0, 0].set_ylabel('Flux ')
+axs[0, 0].set_title('Best Fit Polynomial on Spectral Data ')
+axs[0, 0].grid(True, linestyle='--', alpha=0.7)
+
+# Plot the difference between original data and best-fit curve
+difference = flux - best_fit_curve(x_data)
+axs[1, 0].plot(x_data, difference, label='Difference (Original)', color='green')
+axs[1, 0].axhline(y=0, color='black', linestyle='--', linewidth=1)
+axs[1, 0].legend()
+axs[1, 0].set_ylabel('Difference ')
+axs[1, 0].set_title('Difference ')
+axs[1, 0].grid(True, linestyle='--', alpha=0.7)
+
+# Remove pixels with a difference greater than 0.2 * 1e-15
+threshold = 0.15 * 1e-15
+mask = np.abs(difference) <= threshold
+new_flux = flux[mask]
+removed_pixels = flux[~mask]
+
+# Loop through degrees to find the new best fit line
+new_best_fit_degree = None
+new_best_fit_mse = float('inf')
+
+for degree in range(1, 8):
+    coefficients = np.polyfit(x_data[mask], new_flux, degree)
+    fitted_curve = np.poly1d(coefficients)
+    y_fit = fitted_curve(x_data[mask])
+    mse = calculate_mse(new_flux, y_fit)
+
+    if mse < new_best_fit_mse:
+        new_best_fit_mse = mse
+        new_best_fit_degree = degree
+
+new_best_fit_coefficients = np.polyfit(x_data[mask], new_flux, new_best_fit_degree)
+new_best_fit_curve = np.poly1d(new_best_fit_coefficients)
+
+# Scatter and highlight removed pixels on the new best fit curve
+axs[0, 1].plot(x_data, flux, label='Original Spectral Data')
+axs[0, 1].plot(x_fit, new_best_fit_curve(x_fit), label=f'New Best Fit (Degree {new_best_fit_degree})', color='red')
+axs[0, 1].scatter(np.where(~mask)[0], removed_pixels, color='black', s=9, label='Removed Pixels')
+axs[0, 1].axhline(y=0, color='black', linestyle='--', linewidth=1)
+axs[0, 1].legend()
+axs[0, 1].set_xlabel('Pixels')
+axs[0, 1].set_ylabel('Flux ')
+axs[0, 1].set_title('New Best Fit after Thresholding ')
+axs[0, 1].grid(True, linestyle='--', alpha=0.7)
+
+# Plot the difference between original data and new best-fit curve
+new_difference = flux - new_best_fit_curve(x_data)
+axs[1, 1].plot(x_data, new_difference, label='Difference (filtered data)', color='green')
+axs[1, 1].axhline(y=0, color='black', linestyle='--', linewidth=1)
+axs[1, 1].legend()
+axs[1, 1].set_xlabel('Pixels')
+axs[1, 1].set_ylabel('Difference ')
+axs[1, 1].set_title('Difference  ')
+axs[1, 1].grid(True, linestyle='--', alpha=0.7)
+
+plt.tight_layout()
+plt.show()
+
+print(f'Best Fit Coefficients (Degree {best_fit_degree}):', best_fit_coefficients)
+print(f'New Best Fit Coefficients (Degree {new_best_fit_degree}) after Thresholding:', new_best_fit_coefficients)
