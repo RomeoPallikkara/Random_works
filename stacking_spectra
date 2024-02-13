@@ -1,55 +1,178 @@
+#importing the required python packages
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.io import fits
+from scipy.optimize import curve_fit
+from sklearn.metrics import r2_score
+from scipy.interpolate import interp1d
+import csv
+from scipy.stats import norm
 import os
 import glob
-from astropy.io import fits
-import matplotlib.pyplot as plt
-import numpy as np
+
+# defining the values required in the code 
+source_name = 'ton 599'
+redshift = 0.724745
+threshold_difference = 0.
+scale_factor_for_gauss = 6
 
 folder_path = "/home/romeo/Desktop/High_energy/lab/ton599"
-redshift = 0.724745
-min_wavelength = 2720 * (1 + redshift) *(1 + redshift)
-max_wavelength = 2870 * (1 + redshift) *(1 + redshift)
-pixel_to_angstrom = 4
-
-minimum_wavelength = 4000
-maximum_wavelength = 7550
 
 pattern = os.path.join(folder_path, '**', 'ton599.fc.spec_*.fits')
 filtered_files = glob.glob(pattern, recursive=True)
 
+
+lower_bound = 4000/(1+redshift)
+upper_bound = 7554/(1+redshift)
+w_int = np.arange(lower_bound,upper_bound,4/(1+redshift))
+
+
 selected_flux = []
+selected_wave=[]
 
 for file in filtered_files:
-    file_path = os.path.join(folder_path, file)
-    hdul = fits.open(file_path)
-    data = hdul[0].data
-    
-    num_pixels = len(data)
-    wavelength_array = np.arange(minimum_wavelength, maximum_wavelength, pixel_to_angstrom)[:num_pixels]
+    try:
+        file_path = os.path.join(folder_path, file)
+        hdul = fits.open(file_path)
+        data = hdul[0].data
+        pixel_to_angstrom = 4
+        min_wavelength = 4000
+        max_wavelength = 7556
+        num_pixels = len(data)
+        wavelength_array = np.arange(min_wavelength, max_wavelength, pixel_to_angstrom)[:num_pixels]
+        min_value_f_flux = np.min(data)
 
-    converted_wavelengths = (1 + redshift) * wavelength_array
+        # Defining a powerlaw model and fitting a PL fit to the data
+        def power_law(x, a, b):
+            return a * (x**b)
 
+        popt, pcov = curve_fit(power_law, wavelength_array, data)
+        continuum_fit = power_law(wavelength_array, *popt)
 
+        # By taking the difference of the PL fit and spectra and removing the pixels that are having a line(above a threshold value)
+        difference = data - continuum_fit
+        max_abs_difference = np.max(np.abs(difference))
+        normalized_difference = difference / max_abs_difference
+        mask = (normalized_difference) < threshold_difference
+        filtered_flux = data[mask]
+        filtered_wavelength = wavelength_array[mask]
+        removed_flux = data[~mask]
+        removed_wavelength = wavelength_array[~mask]
 
-    indices = np.where((converted_wavelengths > min_wavelength) & (converted_wavelengths < max_wavelength))[0]
+        # fitting a PL fit with the filtered datapoints
+        filtered_popt, filtered_pcov = curve_fit(power_law, filtered_wavelength, filtered_flux)
+        filtered_continuum_fit = power_law(filtered_wavelength, *filtered_popt)
 
-    num_pixels = min(num_pixels, len(indices))  
+        # interpolating to calculate the R2 score of the fit
+        interpolated_filtered_powerlaw = interp1d(filtered_wavelength, filtered_continuum_fit, fill_value="extrapolate")(wavelength_array)
+        difference_filtered_powerlaw = data - interpolated_filtered_powerlaw
+        max_abs_difference_filtered_powerlaw = np.max(np.abs(difference_filtered_powerlaw))
+        normalized_difference_filtered_powerlaw = difference_filtered_powerlaw / max_abs_difference_filtered_powerlaw
 
-    selected_wavelengths = converted_wavelengths[indices[:num_pixels]]
-    selected_data = data[indices[:num_pixels]]
+        # converting wavelength to energy units
+        scaled_wavelength_array = wavelength_array / (1 + redshift)
+        wave_energy = scaled_wavelength_array * 10e-10
+        h = 6.62607015e-34
+        c = 299792458
+        energy_array = h * c / (wave_energy)
 
-    
-    normalised_data = selected_data / np.median(selected_data)
-    
-    #plt.plot(selected_wavelengths, selected_data, label=file)
+        # Now from the removed pixels, for each line calculating mean and standard deviation and storing as dict
+        subarrays = []
+        start_index = 0
+        end_index = 0
+        for i in range(1, len(removed_wavelength)):
+            wavelength_diff = removed_wavelength[i] - removed_wavelength[i - 1]
+            if wavelength_diff > 4:
+                subarrays.append(removed_wavelength[start_index:i])
+                start_index = i
+        subarrays.append(removed_wavelength[start_index:])
 
-    selected_flux.append(normalised_data)
+        # Initializing a list to store dictionaries for each subarray
+        subarray_data = []
+        for i, subarray in enumerate(subarrays):
+            std_dev = np.std(subarray)
+            mean = np.mean(subarray)
+            flux_values = removed_flux[np.where(np.isin(removed_wavelength, subarray))]
 
-# plt.xlabel('Wavelength (Angstrom)')
-# plt.ylabel('Normalized Flux')  # Update the label to indicate normalization
-# plt.title('Normalized Spectrum Plot')
-# plt.axvline(x=7452.538, color='black', linestyle='-', label='Fe II', linewidth=1.5)
-# plt.grid(True, linestyle='--', alpha=0.5)
-# plt.tight_layout()
+            # Creating a dictionary for the current subarray
+            subarray_dict = {
+                "subarray": subarray,
+                "flux_values": flux_values,
+                "standard_deviation": std_dev,
+                "mean": mean
+            }
+            subarray_data.append(subarray_dict)
+
+        # I have a csv file that contains the list of the already identified spectral lines, importing that into the spectra and then plotting it
+        line_file_path = "/home/romeo/Desktop/High_energy/lab/codes/spectral_lines_ton599.csv"
+        line_wavelengths = []
+        line_labels = []
+        with open(line_file_path, newline='') as line_csvfile:
+            line_reader = csv.reader(line_csvfile)
+            for row in line_reader:
+                line_wavelengths.append(float(row[0]))
+                line_labels.append(row[1])
+
+        rounded_line_wavelengths = [round(wavelength) for wavelength in line_wavelengths]
+        rounded_removed_wavelengths = [round(wavelength / (1 + redshift)) for wavelength in removed_wavelength]
+        found_lines = [i for i in rounded_removed_wavelengths if i in rounded_line_wavelengths]
+
+        for removed_wavelength in rounded_removed_wavelengths:
+            for line in rounded_line_wavelengths:
+                if removed_wavelength - 2 <= line <= removed_wavelength + 2:
+                    found_lines.append(line)
+
+        found_lines = list(set(found_lines))
+        corresponding_labels = [line_labels[rounded_line_wavelengths.index(found)] for found in found_lines]
+
+        # plotting gaussian to the region of identified spectral lines
+        def plot_gaussians_with_spectra(subarray_data, scale_factor, data, scaled_wavelength_array, redshift):
+            gaussian_eliminated_wavelength = []
+            gaussian_eliminated_flux = []
+            gaussian_eliminated_indices = []
+
+            for i, subarray_dict in enumerate(subarray_data):
+                mean = subarray_dict["mean"]
+                std_dev = subarray_dict["standard_deviation"]
+                x = np.linspace(min(subarray_dict["subarray"]) - 15 * scale_factor, max(subarray_dict["subarray"]) + 15 * scale_factor, 100)
+                scaled_x = x / (1 + redshift)
+                y = norm.pdf(x, mean, scale_factor * std_dev)  # Calculate y values for Gaussian curve
+                sub_flux = subarray_dict["flux_values"]
+                y *= np.max(sub_flux) / np.max(y)  # Scale y values to match flux scale of the spectrum
+
+                mask = (y) > min_value_f_flux * 0.8
+                gauss_y = y[mask]
+                gauss_x = scaled_x[mask]
+
+                if len(gauss_x) > 0:
+                    within_gaussian_mask = np.logical_and(scaled_wavelength_array >= min(gauss_x), scaled_wavelength_array <= max(gauss_x))
+                    gaussian_eliminated_wavelength.extend(scaled_wavelength_array[within_gaussian_mask])
+                    gaussian_eliminated_flux.extend(data[within_gaussian_mask])
+                    gaussian_eliminated_indices.extend(np.where(within_gaussian_mask)[0])
+
+            return np.array(gaussian_eliminated_wavelength), np.array(gaussian_eliminated_flux), np.array(gaussian_eliminated_indices)
+
+        gaussian_eliminated_wavelength, gaussian_eliminated_flux, gaussian_eliminated_indices = plot_gaussians_with_spectra(subarray_data, scale_factor_for_gauss, data, scaled_wavelength_array, redshift)
+
+        # plotting another PL fit to the new set of data points after filtering all the data
+        final_flux = np.delete(data, gaussian_eliminated_indices)
+        final_wavelength = np.delete(wavelength_array, gaussian_eliminated_indices)
+        gauss_filtered_popt, gauss_filtered_pcov = curve_fit(power_law, final_wavelength, final_flux)
+        gauss_filtered_continuum_fit = power_law(final_wavelength, *gauss_filtered_popt)
+
+        selected_wavelengths = final_wavelength / (1 + redshift)
+        selected_data = final_flux
+        normalised_data = selected_data / np.median(selected_data)
+        f = interp1d(selected_wavelengths,selected_data,fill_value ='extrapolate')
+        f_int = f(w_int)
+        new_flux = list(f_int)
+
+        selected_flux.append(new_flux)
+        selected_wave.append(selected_wavelengths)
+
+    except:
+        print("error")
+
 
 arrays = [np.array(x) for x in selected_flux]
 mean_flux = [np.mean(k) for k in zip(*arrays)]
@@ -65,19 +188,13 @@ plt.style.use('seaborn-darkgrid')
 fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 8), sharex=True)
 
 # Subplot 1: Mean Flux
-axes[0].plot(selected_wavelengths, mean_flux, label='Mean Flux', linestyle='-', color='blue', linewidth=2)
-#axes[0].axvline(x=7452.538, color='red', linestyle='--', label='Fe II', linewidth=1.5)
-axes[0].axhline(y=1, color='black', linestyle='-' , linewidth=1.5)
-#axes[0].text(7451.538, 1.01, 'Some line ', color='red', verticalalignment='bottom', horizontalalignment='right', fontsize=10)
+axes[0].plot(w_int, mean_flux, label='Mean Flux', linestyle='-', color='blue', linewidth=2)
 axes[0].set_ylabel('Normalized Flux', fontsize=12)
 axes[0].set_title(f'Mean Stacked Spectra (Number of systems ={num_systems_used})', fontsize=14)
 axes[0].legend()
 
 # Subplot 2: Median Flux
-axes[1].plot(selected_wavelengths, median_flux, label='Median Flux', linestyle='-', color='green', linewidth=2)
-#axes[1].axvline(x=7452.538, color='red', linestyle='--', label='Fe II', linewidth=1.5)
-axes[1].axhline(y=1, color='black', linestyle='-' , linewidth=1.5)
-#axes[1].text(7451.538, 1.01, 'Some line', color='red', verticalalignment='bottom', horizontalalignment='right', fontsize=10)
+axes[1].plot(w_int, median_flux, label='Median Flux', linestyle='-', color='green', linewidth=2)
 axes[1].set_xlabel('Converted Wavelength ($\AA$)', fontsize=12)
 axes[1].set_ylabel('Normalized Flux', fontsize=12)
 axes[1].set_title(f'Median Stacked Spectra (Number of systems ={num_systems_used})', fontsize=14)
