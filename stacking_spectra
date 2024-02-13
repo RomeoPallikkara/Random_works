@@ -1,0 +1,88 @@
+import os
+import glob
+from astropy.io import fits
+import matplotlib.pyplot as plt
+import numpy as np
+
+folder_path = "/home/romeo/Desktop/High_energy/lab/ton599"
+redshift = 0.724745
+min_wavelength = 2720 * (1 + redshift) *(1 + redshift)
+max_wavelength = 2870 * (1 + redshift) *(1 + redshift)
+pixel_to_angstrom = 4
+
+minimum_wavelength = 4000
+maximum_wavelength = 7550
+
+pattern = os.path.join(folder_path, '**', 'ton599.fc.spec_*.fits')
+filtered_files = glob.glob(pattern, recursive=True)
+
+selected_flux = []
+
+for file in filtered_files:
+    file_path = os.path.join(folder_path, file)
+    hdul = fits.open(file_path)
+    data = hdul[0].data
+    
+    num_pixels = len(data)
+    wavelength_array = np.arange(minimum_wavelength, maximum_wavelength, pixel_to_angstrom)[:num_pixels]
+
+    converted_wavelengths = (1 + redshift) * wavelength_array
+
+
+
+    indices = np.where((converted_wavelengths > min_wavelength) & (converted_wavelengths < max_wavelength))[0]
+
+    num_pixels = min(num_pixels, len(indices))  
+
+    selected_wavelengths = converted_wavelengths[indices[:num_pixels]]
+    selected_data = data[indices[:num_pixels]]
+
+    
+    normalised_data = selected_data / np.median(selected_data)
+    
+    #plt.plot(selected_wavelengths, selected_data, label=file)
+
+    selected_flux.append(normalised_data)
+
+# plt.xlabel('Wavelength (Angstrom)')
+# plt.ylabel('Normalized Flux')  # Update the label to indicate normalization
+# plt.title('Normalized Spectrum Plot')
+# plt.axvline(x=7452.538, color='black', linestyle='-', label='Fe II', linewidth=1.5)
+# plt.grid(True, linestyle='--', alpha=0.5)
+# plt.tight_layout()
+
+arrays = [np.array(x) for x in selected_flux]
+mean_flux = [np.mean(k) for k in zip(*arrays)]
+median_flux = [np.median(k) for k in zip(*arrays)]
+
+
+
+num_systems_used = len(selected_flux)
+
+
+plt.style.use('seaborn-darkgrid')
+
+fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 8), sharex=True)
+
+# Subplot 1: Mean Flux
+axes[0].plot(selected_wavelengths, mean_flux, label='Mean Flux', linestyle='-', color='blue', linewidth=2)
+#axes[0].axvline(x=7452.538, color='red', linestyle='--', label='Fe II', linewidth=1.5)
+axes[0].axhline(y=1, color='black', linestyle='-' , linewidth=1.5)
+#axes[0].text(7451.538, 1.01, 'Some line ', color='red', verticalalignment='bottom', horizontalalignment='right', fontsize=10)
+axes[0].set_ylabel('Normalized Flux', fontsize=12)
+axes[0].set_title(f'Mean Stacked Spectra (Number of systems ={num_systems_used})', fontsize=14)
+axes[0].legend()
+
+# Subplot 2: Median Flux
+axes[1].plot(selected_wavelengths, median_flux, label='Median Flux', linestyle='-', color='green', linewidth=2)
+#axes[1].axvline(x=7452.538, color='red', linestyle='--', label='Fe II', linewidth=1.5)
+axes[1].axhline(y=1, color='black', linestyle='-' , linewidth=1.5)
+#axes[1].text(7451.538, 1.01, 'Some line', color='red', verticalalignment='bottom', horizontalalignment='right', fontsize=10)
+axes[1].set_xlabel('Converted Wavelength ($\AA$)', fontsize=12)
+axes[1].set_ylabel('Normalized Flux', fontsize=12)
+axes[1].set_title(f'Median Stacked Spectra (Number of systems ={num_systems_used})', fontsize=14)
+axes[1].legend()
+
+plt.tight_layout()
+plt.savefig('normalized_beautiful_research_paper_plot.png', dpi=300)  # Adjust filename and dpi as needed
+plt.show()
