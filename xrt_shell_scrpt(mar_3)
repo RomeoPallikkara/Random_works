@@ -1,0 +1,91 @@
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/xselect.log
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_session.xsl
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_hist.xsl
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_ascii_out.xsl
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_region.xsl
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_files.tmp
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_read_cat.xsl
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_display.def
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_obslist.def
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/project_669_obscat.tmp
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/PC.pha
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/PC_exp.arf
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/sw00030797001xpcw2po_ex.img
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/sw00030797001xpcw2po_rawinstr.img.gz
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/PCback.pi
+rm -f /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/PC.pi
+
+
+#!/bin/bash
+
+# Change directory to the desired location
+cd /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event
+
+# Start xselect
+xselect << EOF
+project_669
+read event
+./
+sw00030797001xpcw2po_cl.evt.gz
+yes
+filter region /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/x_source_45_ds9.reg
+extract spectrum
+save spectrum PC.pi
+clear region
+filter region /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/x_back_ds9.reg
+extract spectrum
+save spectrum PCback.pi
+clear region
+exit
+no
+EOF
+
+
+cd /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event
+
+# Run xrtexpomap for event file
+xrtexpomap << EOF
+sw00030797001xpcw2po_cl.evt.gz 
+/media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/auxil/sw00030797001pat.fits.gz
+/media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/hk/sw00030797001xhd.hk.gz
+./
+EOF
+
+
+cd /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event
+
+xrtmkarf << EOF
+/media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/sw00030797001xpcw2po_ex.img
+/media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event/PC.pi
+yes
+PC_exp.arf
+-1
+-1
+EOF
+
+
+cd /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event
+# Run grppha
+grppha << EOF
+PC.pi
+PC.pha
+bad 0-29
+group min 5
+chkey backfile PCback.pi
+chkey respfile /home/romeo/caldb/data/swift/xrt/cpf/rmf/swxpc0to12s0_20010101v012.rmf
+exit
+EOF
+
+cd /media/romeo/ROMEO_HP/PHY669_PROJECT_DATA/parent_data_PKSS1510_089/00030797001/xrt/event
+# Run xspec
+xspec << EOF
+da PC.pha
+cpd /xs
+setpl en
+pl
+ig bad
+pl ld
+exit
+EOF
+
+
