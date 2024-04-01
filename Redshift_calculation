@@ -1,0 +1,29 @@
+import numpy as np
+from astropy.io import fits
+import os
+import glob
+pixel_to_angstrom = 4
+min_wavelength = 4000
+max_wavelength = 7556
+emission_lambda_min = 4723
+emission_lambda_max = 4941
+rest_wavelength_Mg = 2802.705
+folder_path = "/home/romeo/Desktop/High_energy/lab/ton599"
+pattern = os.path.join(folder_path, '**', 'ton599.fc.spec_*.fits')
+filtered_files = glob.glob(pattern, recursive=True)
+redshift_values = []
+for file_path in filtered_files:
+    hdul = fits.open(file_path)
+    data = hdul[0].data
+    num_pixels = len(data)
+    wavelength_array = np.arange(min_wavelength, max_wavelength, pixel_to_angstrom)[:num_pixels]
+    emission_indices = np.where((wavelength_array >= emission_lambda_min) & (wavelength_array <= emission_lambda_max))
+    emission_data = data[emission_indices]
+    peak_value = np.max(emission_data)
+    peak_index = np.argmax(emission_data)
+    peak_wavelength = wavelength_array[emission_indices][peak_index]
+    observed_wavelength_Mg = peak_wavelength
+    redshift_Mg = (observed_wavelength_Mg - rest_wavelength_Mg) / rest_wavelength_Mg
+    redshift_values.append(redshift_Mg)
+mean_redshift = np.mean(redshift_values)
+print("Mean redshift value:", mean_redshift)
