@@ -201,5 +201,4 @@ axes[1].set_title(f'Median Stacked Spectra (Number of systems ={num_systems_used
 axes[1].legend()
 
 plt.tight_layout()
-plt.savefig('normalized_beautiful_research_paper_plot.png', dpi=300)  # Adjust filename and dpi as needed
 plt.show()
