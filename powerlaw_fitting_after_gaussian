@@ -12,17 +12,17 @@ from scipy.stats import norm
 # defining the values required in the code 
 source_name = 'ton 599'
 redshift = 0.724745
-threshold_difference = 0.2
+threshold_difference = 0.22 
 scale_factor_for_gauss=6
 
 
 #importing the datafile and extracting wavelength, flux
-fits_path = '/home/romeo/Desktop/High_energy/lab/ton599/ton599_3_test/ton599.fc.spec_110104.fits'
+fits_path = '/home/romeo/Desktop/High_energy/lab/ton599/ton599_3/ton599.fc.spec_110104.fits'
 hdul = fits.open(fits_path)
 data = hdul[0].data
 pixel_to_angstrom = 4
 min_wavelength = 4000
-max_wavelength = 7556
+max_wavelength = 7554
 num_pixels = len(data)
 wavelength_array = np.arange(min_wavelength, max_wavelength, pixel_to_angstrom)[:num_pixels]
 min_value_f_flux=np.min(data)
@@ -39,7 +39,7 @@ continuum_fit = power_law(wavelength_array, *popt)
 difference = data - continuum_fit
 max_abs_difference = np.max(np.abs(difference))
 normalized_difference = difference / max_abs_difference
-mask = (normalized_difference) < threshold_difference
+mask = np.abs(normalized_difference) < threshold_difference
 filtered_flux = data[mask]
 filtered_wavelength = wavelength_array[mask]
 removed_flux = data[~mask]
@@ -52,12 +52,13 @@ filtered_continuum_fit = power_law(filtered_wavelength, *filtered_popt)
 
 #interpolating to calculate the R2 score of the fit
 interpolated_filtered_powerlaw = interp1d(filtered_wavelength, filtered_continuum_fit,  fill_value="extrapolate" )(wavelength_array)
-difference_filtered_powerlaw = data - interpolated_filtered_powerlaw
+difference_filtered_powerlaw = data / interpolated_filtered_powerlaw
 max_abs_difference_filtered_powerlaw = np.max(np.abs(difference_filtered_powerlaw))
 normalized_difference_filtered_powerlaw = difference_filtered_powerlaw / max_abs_difference_filtered_powerlaw
 
+
 #converting wavelength to energy units
-scaled_wavelength_array = wavelength_array / (1 + redshift)
+scaled_wavelength_array = wavelength_array /(1+redshift)
 wave_energy = scaled_wavelength_array*10e-10
 h = 6.62607015e-34  
 c = 299792458
@@ -106,12 +107,12 @@ for i, subarray_dict in enumerate(subarray_data):
     
 fig, (ax1, ax2 ) = plt.subplots(2, 1, figsize=(18, 9), gridspec_kw={'height_ratios': [3, 1]})
 ax1.plot(scaled_wavelength_array, data, label='Spectrum', linewidth=1.5, color='gray')
-ax1.scatter(removed_wavelength / (1 + redshift), removed_flux, label='Removed Pixels', color='green', s=10)
-ax1.plot(filtered_wavelength / (1 + redshift), filtered_continuum_fit, label='Filtered Power Law Fit', linestyle='-', color='blue', linewidth=1.5)
+ax1.scatter(removed_wavelength /(1+redshift), removed_flux, label='Removed Pixels', color='green', s=10)
+ax1.plot(filtered_wavelength /(1+redshift), filtered_continuum_fit, label='Filtered Power Law Fit', linestyle='-', color='blue', linewidth=1.5)
 ax1.plot(scaled_wavelength_array, continuum_fit, label='Power Law Fit', linestyle='-', color='green', linewidth=1.5)
 ax1.set_xlabel('Wavelength (Å)', fontsize=12)
 ax1.set_ylabel('Flux (erg/cm2/s/A)', fontsize=12)
-ax1.set_title(f'Spectrum with Power Law Fit : ({source_name})', fontsize=14, fontweight='bold')
+ax1.set_title(f'Spectrum with Power Law Fit : ({source_name}_3_110104)', fontsize=14, fontweight='bold')
 ax1.legend(fontsize=10)
 ax1.grid(True, linestyle='--', alpha=0.7)
 
@@ -119,7 +120,7 @@ ax1.grid(True, linestyle='--', alpha=0.7)
 ax1_wavelength = ax1.twiny()
 ax1_wavelength.set_xlim(ax1.get_xlim())
 ax1_wavelength.set_xticks(ax1.get_xticks())
-ax1_wavelength.set_xticklabels(['{:.2e}'.format((h * c) / (wavelength / (1 + redshift) * 1e-10)) for wavelength in ax1.get_xticks()])
+ax1_wavelength.set_xticklabels(['{:.2e}'.format((h * c) / (wavelength /(1+redshift) * 1e-10)) for wavelength in ax1.get_xticks()])
 ax1_wavelength.set_xlabel('Energy(J)', fontsize=12)
 
 #I have a csv file that contains the list of the already identified spectral lines , importing that into the spetcra and then plotting it 
@@ -133,7 +134,7 @@ with open(line_file_path, newline='') as line_csvfile:
         line_labels.append(row[1])
 
 rounded_line_wavelengths = [round(wavelength) for wavelength in line_wavelengths]
-rounded_removed_wavelengths = [round(wavelength / (1 + redshift)) for wavelength in removed_wavelength]
+rounded_removed_wavelengths = [round(wavelength /(1+redshift)) for wavelength in removed_wavelength]
 found_lines = [i for i in rounded_removed_wavelengths if i in rounded_line_wavelengths]
 
 for removed_wavelength in rounded_removed_wavelengths:
@@ -161,35 +162,35 @@ for line, label in zip(found_lines, corresponding_labels):
 def plot_gaussians_with_spectra(subarray_data, scale_factor, data, scaled_wavelength_array, redshift):
     gaussian_eliminated_wavelength = []
     gaussian_eliminated_flux = []
-    gaussian_eliminated_indices=[]
+    gaussian_eliminated_indices = []
+    
     for i, subarray_dict in enumerate(subarray_data):
         mean = subarray_dict["mean"]
         std_dev = subarray_dict["standard_deviation"]       
         x = np.linspace(min(subarray_dict["subarray"]) - 15 * scale_factor, max(subarray_dict["subarray"]) + 15 * scale_factor, 100)       
-        scaled_x = x / (1 + redshift)     
+        scaled_x = x /(1+redshift)     
         y = norm.pdf(x, mean, scale_factor * std_dev)         # Calculate y values for Gaussian curve
         sub_flux = subarray_dict["flux_values"]       
         y *= np.max(sub_flux) / np.max(y)                     # Scale y values to match flux scale of the spectrum
 
-
-        mask = (y) > min_value_f_flux*0.8
+        mask = (y) > min_value_f_flux * 0.8
         gauss_y = y[mask]
         gauss_x = scaled_x[mask]
 
-        # Plot Gaussian curve
-        #ax1.plot(gauss_x, gauss_y, linestyle='--')
-
+        if len(gauss_x) > 0:
+            # Plot Gaussian curve
+            # ax1.plot(gauss_x, gauss_y, linestyle='--')
         
-        # Find points within the Gaussian curve and add them to the eliminated points arrays
-        within_gaussian_mask = np.logical_and(scaled_wavelength_array >= min(gauss_x), scaled_wavelength_array <= max(gauss_x))
-        gaussian_eliminated_wavelength.extend(scaled_wavelength_array[within_gaussian_mask])
-        gaussian_eliminated_flux.extend(data[within_gaussian_mask])
-        gaussian_eliminated_indices.extend(np.where(within_gaussian_mask)[0])
+            # Find points within the Gaussian curve and add them to the eliminated points arrays .....
+            within_gaussian_mask = np.logical_and(scaled_wavelength_array >= min(gauss_x), scaled_wavelength_array <= max(gauss_x))
+            gaussian_eliminated_wavelength.extend(scaled_wavelength_array[within_gaussian_mask])
+            gaussian_eliminated_flux.extend(data[within_gaussian_mask])
+            gaussian_eliminated_indices.extend(np.where(within_gaussian_mask)[0])
 
-        ax1.scatter(gaussian_eliminated_wavelength , gaussian_eliminated_flux, color='black', s=10)
+            ax1.scatter(gaussian_eliminated_wavelength , gaussian_eliminated_flux, color='black', s=10)
 
+    return np.array(gaussian_eliminated_wavelength), np.array(gaussian_eliminated_flux), np.array(gaussian_eliminated_indices)
 
-    return np.array(gaussian_eliminated_wavelength), np.array(gaussian_eliminated_flux),np.array(gaussian_eliminated_indices)
 
 
 
@@ -201,7 +202,7 @@ final_flux = np.delete(data, gaussian_eliminated_indices)
 final_wavelength = np.delete(wavelength_array, gaussian_eliminated_indices)
 gauss_filtered_popt, gauss_filtered_pcov = curve_fit(power_law, final_wavelength, final_flux)
 gauss_filtered_continuum_fit = power_law(final_wavelength, *gauss_filtered_popt)
-ax1.plot(final_wavelength /(1 + redshift), gauss_filtered_continuum_fit, label='Final Power Law Fit', linestyle='-', color='red')
+ax1.plot(final_wavelength /(1+redshift), gauss_filtered_continuum_fit, label='Final Power Law Fit', linestyle='-', color='red')
 
 
 #adding elements to the plot 
@@ -233,13 +234,13 @@ ax1.legend(fontsize=10, loc='upper right')
 
 
 #seondary plot (normalized spectra for visualization)
-ax2.plot(scaled_wavelength_array, normalized_difference_filtered_powerlaw, color='gray', linewidth=1.5)
+ax2.plot(scaled_wavelength_array, difference_filtered_powerlaw, color='gray', linewidth=1.5)
 ax2.set_xlabel('Wavelength (Å)', fontsize=10)
 ax2.set_ylabel('difference', fontsize=10)
 ax2.grid(True, linestyle='--', alpha=0.7)
-ax2.axhline(y=0, color='black', linestyle='--', linewidth=1.2, label='Zero Line')
-filtered_norm_text = f'Normalization Parameter Value: {max_abs_difference_filtered_powerlaw:.4e}'
-ax2.text(0.05, 0.85, filtered_norm_text, transform=ax2.transAxes, fontsize=10, color='black', bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
+ax2.axhline(y=1, color='black', linestyle='--', linewidth=1.2, label='Zero Line')
+# filtered_norm_text = f'Normalization Parameter Value: {max_abs_difference_filtered_powerlaw:.4e}'
+# ax2.text(0.05, 0.85, filtered_norm_text, transform=ax2.transAxes, fontsize=10, color='black', bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.3'))
 plt.show()
 
 
