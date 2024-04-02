@@ -1,7 +1,10 @@
+#importing the required python packages
 import numpy as np
 from astropy.io import fits
 import os
 import glob
+
+#opening data files and choosing a predefined emission line(here i am using the Mg II line ) and calculating the redshift.
 pixel_to_angstrom = 4
 min_wavelength = 4000
 max_wavelength = 7556
