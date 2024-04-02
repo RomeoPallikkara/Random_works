@@ -125,6 +125,7 @@ for file in filtered_files:
         found_lines = list(set(found_lines))
         corresponding_labels = [line_labels[rounded_line_wavelengths.index(found)] for found in found_lines]
 
+
         # plotting gaussian to the region of identified spectral lines
         def plot_gaussians_with_spectra(subarray_data, scale_factor, data, scaled_wavelength_array, redshift):
             gaussian_eliminated_wavelength = []
