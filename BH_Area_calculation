@@ -1,0 +1,22 @@
+import cv2
+import numpy as np
+img = cv2.imread('/home/romeo/Desktop/unibh/s3.png')
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+_, thresh = cv2.threshold(blurred, 128, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+outer_contour = max(contours, key=cv2.contourArea)
+cv2.drawContours(img, [outer_contour], -1, (255, 0, 0), 3)
+length_cm = 10  
+breadth_cm = 8  
+px_to_cm_length = length_cm / img.shape[1]  
+px_to_cm_breadth = breadth_cm / img.shape[0]  
+area_inside_contour_cm2 = cv2.contourArea(outer_contour) * px_to_cm_length * px_to_cm_breadth
+print("Area inside the outer contour (in cm²):", area_inside_contour_cm2)
+title_text = "Ferrite Rod"
+cv2.putText(img, title_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+area_text = f"Area inside curve: {area_inside_contour_cm2:.2f} cm square"
+cv2.putText(img, area_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+cv2.imshow('Contours', img)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
